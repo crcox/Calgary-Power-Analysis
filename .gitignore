@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*_simulation.json
+*_simulation.rds
+data/
