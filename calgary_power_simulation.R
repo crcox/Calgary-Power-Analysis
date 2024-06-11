@@ -10,54 +10,84 @@ d <- read_csv("data/calgary-means-sd.csv") |>
 
 # I use this to split up the data and sample down to 300 concrete and 300
 # abstract words. May not be needed in practice.
-g <- group_by(d, WordType)
+breaks <- d |>
+    filter(WordType == "Concrete") |>
+    _$RTclean_mean |>
+    quantile(probs = seq(0, 1, 1/3))
 
-x <- map(group_split(g), ~{
-    breaks <- quantile(.x$RTclean_mean, probs = seq(0, 1, 1/3))
-    .x |>
+x <- list(
+    Concrete = filter(d, WordType == "Concrete") |>
         mutate(
             cond = cut(RTclean_mean, breaks, labels = c("low", "med", "high"))
         ) |>
         na.omit() |>
         group_by(cond) |>
-        slice_sample(n = 100)
-})
-
-names(x) <- group_keys(g)$WordType
+        slice_sample(n = 100) |>
+        ungroup(),
+    Abstract = filter(d, WordType == "Abstract") |>
+        mutate(
+            cond = factor(NA, levels = c("low", "med", "high"))
+        ) |>
+        slice_sample(n = 300)
+)
 
 # Simulation function ----
-sim_exp <- function(x, n_subj) {
-    m <- map(x, function(df, n_subj) {
+sim_exp <- function(x, sample_size) {
+    m <- imap(x, function(df, type, sample_size) {
         replicate(
-            n_subj,
-            rnorm(300, df$RTclean_mean, df$RTclean_sd)
+            sample_size,
+            rnorm(nrow(df), df$RTclean_mean, df$RTclean_sd)
         ) |>
             apply(2, function(M) {
-                tapply(M, INDEX = df$cond, FUN = mean)
+                if (type == "Abstract") {
+                    mean(M)
+                } else {
+                    tapply(M, INDEX = df$cond, FUN = mean)
+                }
             })
-    }, n_subj = n_subj)
+    }, sample_size = sample_size)
 
-    d <- map(m, ~{
+    dlst <- map(m, ~{
         expand.grid(
-            cond = as.factor(row.names(.x)),
-            subj = seq_len(n_subj)
+            cond = if(is.matrix(.x)) as.factor(row.names(.x)) else "abs",
+            subj = seq_len(sample_size)
         ) |>
             mutate(rt = c(.x))
-    }) |>
-        list_rbind(names_to = "WordType") |>
-        mutate(WordType = as.factor(WordType))
+    })
+    d <- dlst$Concrete |>
+        left_join(select(dlst$Abstract, subj, rt_abs = rt), by = "subj") |>
+        mutate(rt_diff = rt - rt_abs)
 
-    a <- summary(aov(rt ~ cond * WordType, data = d))[[1]]
+    a <- summary(aov(rt_diff ~ cond, data = d))[[1]]
+    tt <- map(split(d, d$cond), ~{
+        t.test(.x$rt_diff)
+    })
+    tpw <- list(
+        low_med = t.test(d$rt[d$cond == "low"], d$rt[d$cond == "med"]),
+        low_high = t.test(d$rt[d$cond == "low"], d$rt[d$cond == "high"]),
+        med_high = t.test(d$rt[d$cond == "med"], d$rt[d$cond == "high"])
+    )
     tibble(
-        sample_size = n_subj,
+        sample_size = sample_size,
         cond_Fval = a[["F value"]][1],
-        type_Fval = a[["F value"]][2],
-        inter_Fval = a[["F value"]][3],
         cond_pval = a[["Pr(>F)"]][1],
-        type_pval = a[["Pr(>F)"]][2],
-        inter_pval = a[["Pr(>F)"]][3]
+        low_abs_tval = tt$low[["statistic"]],
+        low_abs_pval = tt$low[["p.value"]],
+        med_abs_tval = tt$med[["statistic"]],
+        med_abs_pval = tt$med[["p.value"]],
+        high_abs_tval = tt$high[["statistic"]],
+        high_abs_pval = tt$high[["p.value"]],
+        low_med_tval = tt$low_med[["statistic"]],
+        low_med_pval = tt$low_med[["p.value"]],
+        low_high_tval = tt$low_high[["statistic"]],
+        low_high_pval = tt$low_high[["p.value"]],
+        med_high_tval = tt$med_high[["statistic"]],
+        med_high_pval = tt$med_high[["p.value"]]
     )
 }
+
+
+tmp <- sim_exp(x, 20)
 
 
 # Run simulation for a single sample size ----
