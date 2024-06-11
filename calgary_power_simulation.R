@@ -77,12 +77,12 @@ sim_exp <- function(x, sample_size) {
         med_abs_pval = tt$med[["p.value"]],
         high_abs_tval = tt$high[["statistic"]],
         high_abs_pval = tt$high[["p.value"]],
-        low_med_tval = tt$low_med[["statistic"]],
-        low_med_pval = tt$low_med[["p.value"]],
-        low_high_tval = tt$low_high[["statistic"]],
-        low_high_pval = tt$low_high[["p.value"]],
-        med_high_tval = tt$med_high[["statistic"]],
-        med_high_pval = tt$med_high[["p.value"]]
+        low_med_tval = tpw$low_med[["statistic"]],
+        low_med_pval = tpw$low_med[["p.value"]],
+        low_high_tval = tpw$low_high[["statistic"]],
+        low_high_pval = tpw$low_high[["p.value"]],
+        med_high_tval = tpw$med_high[["statistic"]],
+        med_high_pval = tpw$med_high[["p.value"]]
     )
 }
 
